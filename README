@@ -1,0 +1,54 @@
+Auth Service API
+
+Tech Stack
+	• Frontend
+		○ React
+	• Backend
+		○ Fastapi
+	• Email
+		○ Jinja2 in Python
+	• Database
+		○ MongoDB
+
+Frontend
+	• Will serve as GUI for admin
+
+Backend
+	• Can use a dynamic admin password.
+		○ Losing the admin password would render the backend inaccessible.
+		○ Can reset by changing admin password hash in database.
+	• Endpoints
+		○ Non-admin
+			§ All endpoints will require API key
+			§ /login
+			§ /register
+				□ Will only support Gmail accounts.
+			§ /reset_password
+			§ /delete_user
+		○ Admin
+			§ All endpoints will require admin key
+			§ /register_app
+				□ Generates API key for the app
+			§ /renew_api_key
+				□ Generates new API key for the app
+			§ /delete_app
+			
+Database Design
+	• App names will be used as collection names.
+	• app_name_collection: [
+		{
+			email: "test@gmail.com",
+			hash: "sample_hash",
+			data: { key: any }
+		}
+	]
+
+Library
+	• For developers.
+	• Frontend React library.
+	• Publish to NPM.
+	• Inclusions:
+		○ Functions for login, register, password reset, user deletion.
+		○ Login form (nice to have).
+Login page (nice to have).
+
