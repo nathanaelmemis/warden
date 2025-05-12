@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Callable
+from bson import ObjectId
 from fastapi import Request
 from jose import jwt
 import os
@@ -7,14 +8,18 @@ import hashlib
 
 from schemas.AdminUserModel import AdminUserModel
 from utils import exception
+from utils.database import db
 
-PRIVATE_KEY = os.environ["SECRET_KEY"]
+SECRET_KEY = os.environ["SECRET_KEY"]
 ALGORITHM = "HS256"
+
+admin_col = db.admin
+
 
 def generate_token(data: dict, expire: datetime):
     to_encode = data.copy()
     to_encode.update({ "exp": expire })
-    encoded_jwt = jwt.encode(to_encode, PRIVATE_KEY, ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, ALGORITHM)
     return encoded_jwt
 
 def hash(text: str):
@@ -27,8 +32,13 @@ def get_current_user(req: Request):
         raise exception.unauthorized_access
 
     try:
-        user = jwt.decode(access_token, PRIVATE_KEY, ALGORITHM)
-        del user["exp"]
+        user_id = jwt.decode(access_token, SECRET_KEY, ALGORITHM)["id"]
+
+        user = admin_col.find_one({ "_id": ObjectId(user_id) })
+
+        if (not user):
+            raise exception.unauthorized_access
+
         return AdminUserModel(**user)
     except:
         raise exception.invalid_access_token

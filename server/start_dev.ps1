@@ -1,3 +1,5 @@
+clear
+
 if (-Not (Test-Path -Path ".venv" -PathType Container)) {
     python -m venv .venv
     .\.venv\Scripts\activate
@@ -6,4 +8,6 @@ if (-Not (Test-Path -Path ".venv" -PathType Container)) {
     .\.venv\Scripts\activate
 }
 
-uvicorn main:app --reload --env-file .env.development --app-dir src
+pytest
+
+uvicorn main:app --env-file .env.development --app-dir src

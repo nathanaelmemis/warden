@@ -2,7 +2,10 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from models.NewAppModel import NewAppModel
+import uuid
+from models.NewAppMetadataModel import NewAppMetadataModel
+from models.AppMetadataModel import AppMetadataModel
+from models.UpdateAppMetadataMode import UpdateAppMetadataModel
 from utils.database import db
 
 from models.AdminCredentialsModel import AdminCredentialsModel
@@ -83,14 +86,63 @@ def admin_logout(res: Response):
 
 protected_admin_router = APIRouter()
 
-@protected_admin_router.post("/admin/register_app")
-def register_app(body: NewAppModel, user: AdminUserModel = Depends(get_current_user)):
-    user_apps = admin_col.find({ "_id": ObjectId(user.id) }, { "apps": True })
+@protected_admin_router.post("/admin/app/{app_name}")
+def register_app(app_name: str, body: NewAppMetadataModel, user: AdminUserModel = Depends(get_current_user)):
+    if (app_name in user.apps):
+        return exception.data_conflict("App already exists.")
+    
+    new_app = body.model_dump(exclude=["name"])
+    new_app.update({ "api_key_hash": "" })
+    
+    updated_apps: dict = user.model_dump()["apps"]
+    updated_apps.update({ app_name: new_app })
+    
+    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": updated_apps }})
 
-    print(user_apps)
+    return { "message": f"{app_name} has been registered."}
 
-    if (body.name in user_apps):
-        return "ngew"
+@protected_admin_router.put("/admin/app/{app_name}")
+def update_app(body: UpdateAppMetadataModel, app_name: str, user: AdminUserModel = Depends(get_current_user)):
+    if (app_name not in user.apps):
+        return exception.data_conflict("App doesn't exist.")
+    
+    updated_apps: dict = user.model_dump()["apps"]
+    del updated_apps[app_name]
+    
+    updated_app = body.model_dump(exclude=["name"])
+    updated_app.update({ "api_key_hash": "" })
+    
+    updated_apps.update({ body.name: updated_app })
+    
+    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": updated_apps }})
+
+    return { "message": f"{app_name} has been updated."}
+
+@protected_admin_router.get("/admin/app/{app_name}/generate_api_key")
+def generate_api_key(app_name: str, user: AdminUserModel = Depends(get_current_user)):
+    if (app_name not in user.apps):
+        return exception.data_conflict("App doesn't exist.")
+    
+    api_key = hash(str(uuid.uuid4()))
+
+    updated_apps: dict = user.model_dump()["apps"]
+    updated_apps[app_name]["api_key_hash"] = hash(api_key)
+
+    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": updated_apps }})
+
+    return { "api_key": api_key }
+
+@protected_admin_router.delete("/admin/app/{app_name}")
+def delete_app(app_name: str, user: AdminUserModel = Depends(get_current_user)):
+    if (app_name not in user.apps):
+        return exception.data_conflict("App doesn't exist.")
+
+    updated_apps: dict = user.model_dump()["apps"]
+    del updated_apps[app_name]
+
+    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": updated_apps }})
+
+    return { "message": f"{app_name} deleted successfully." }
 
 
 admin_router.include_router(protected_admin_router)
