@@ -1,20 +1,22 @@
 from datetime import datetime, timedelta
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from database import db
+from models.NewAppModel import NewAppModel
+from utils.database import db
 
 from models.AdminCredentialsModel import AdminCredentialsModel
-import exception
+import utils.exception as exception
 from schemas.AdminUserModel import AdminUserModel
-from auth import generate_token, hash
-import success
+from utils.auth import generate_token, get_current_user, hash
+import utils.success as success
 
 ADMIN_ALLOWED_LOGIN_ATTEMPTS = 3
 ADMIN_ACCESS_TOKEN_EXP_MINS = 10
 ADMIN_REFRESH_TOKEN_EXP_MINS = 60
 
 admin_col = db.admin
+
 
 admin_router = APIRouter()
 
@@ -77,3 +79,18 @@ def admin_logout(res: Response):
     res.delete_cookie(key="refresh_token")
 
     return { "message": "User logged out" }
+
+
+protected_admin_router = APIRouter()
+
+@protected_admin_router.post("/admin/register_app")
+def register_app(body: NewAppModel, user: AdminUserModel = Depends(get_current_user)):
+    user_apps = admin_col.find({ "_id": ObjectId(user.id) }, { "apps": True })
+
+    print(user_apps)
+
+    if (body.name in user_apps):
+        return "ngew"
+
+
+admin_router.include_router(protected_admin_router)
