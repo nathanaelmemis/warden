@@ -5,12 +5,11 @@ import os
 
 load_dotenv()
 
-secret_key = os.environ.get("SECRET_KEY")
-if (secret_key is None):
-    raise EnvironmentError("SECRET_KEY environment variable is not set.")
-mongodb_url = os.environ.get("MONGODB_URL")
-if (mongodb_url is None):
-    raise EnvironmentError("MONGODB_URL environment variable is not set.")
+ENV_VARIABLES = ["SECRET_KEY", "MONGODB_URL", "EMAIL_SERVICE_USER", "EMAIL_SERVICE_PASSWORD"]
+
+for env_var in ENV_VARIABLES:
+    if (os.environ.get(env_var) is None):
+        raise EnvironmentError(f"{env_var} environment variable is not set.")
 
 from admin import admin_router
 

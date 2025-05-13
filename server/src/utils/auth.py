@@ -38,7 +38,12 @@ def get_current_user(req: Request):
 
         if (not user):
             raise exception.unauthorized_access
+        
+        user = AdminUserModel(**user)
 
-        return AdminUserModel(**user)
+        if (not user.account_verified):
+            return exception.account_not_verified
+
+        return user
     except:
         raise exception.invalid_access_token
