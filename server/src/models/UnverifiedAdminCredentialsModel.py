@@ -1,5 +1,5 @@
-from models.AdminCredentialsModel import AdminCredentialsModel
+from pydantic import BaseModel
 
 
-class UnverifiedAdminCredentialsModel(AdminCredentialsModel):
+class UnverifiedAdminCredentialsModel(BaseModel):
     verification_code: str

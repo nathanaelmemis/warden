@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 import uuid
 from models.AppMetadataModel import AppMetadataModel
+from models.ChangePasswordModel import ChangePasswordModel
 from models.UnverifiedAdminCredentialsModel import UnverifiedAdminCredentialsModel
+from schemas.UnverifiedAdminUserModel import UnverifiedAdminUserModel
 from utils.common import app_exist, filter_out_app, get_app, model_list_dump
 from utils.database import db
 import os
@@ -35,6 +37,9 @@ def admin_login(body: AdminCredentialsModel, res: Response):
 
     if (not user):
         return exception.invalid_credentials
+
+    if (user.get("verification_code")):
+        return exception.account_not_verified
 
     user = AdminUserModel(**user)
     
@@ -91,43 +96,21 @@ def admin_register(body: AdminCredentialsModel):
     if (user_exist):
         return exception.data_conflict("Email already used.")
     
+    # TODO: Add link to frontend
+    
     verification_code = ''.join(str(secrets.randbelow(10)) for _ in range(6))
     message = f"You verification code is {verification_code}"
     send_verification_email("Warden", body.email, message)
 
-    admin_col.insert_one({
+    user_id = admin_col.insert_one({
         "email": body.email,
         "hash": hash(body.hash),
-        "apps": {},
+        "apps": [],
         "login_attempts": 0,
         "verification_code": verification_code
     })
 
-    return { "message": "Unverified account has been registered" }
-
-@admin_router.post("/admin/verify", tags=["Admin Account"])
-def verify_account(body: UnverifiedAdminCredentialsModel):
-    user = admin_col.find_one({ "email": body.email })
-
-    if (not user):
-        return exception.invalid_credentials
-
-    user = AdminUserModel(**user)
-    
-    if (user.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
-        return exception.account_locked
-    
-    double_hash = hash(body.hash)
-    if (double_hash != user.hash):
-        # increment login attempts when wrong password
-        admin_col.update_one({ 
-                "_id": ObjectId(user.id) 
-            }, { 
-                "$set": { "login_attempts": user.login_attempts + 1 }
-            })
-        return exception.invalid_credentials
-    
-    
+    return { "message": str(user_id.inserted_id) }
 
 @admin_router.get("/admin/logout", tags=["Admin Account"])
 def admin_logout(res: Response):
@@ -136,8 +119,60 @@ def admin_logout(res: Response):
 
     return { "message": "User logged out" }
 
+@admin_router.post("/admin/{user_id}/verify", tags=["Admin Account"])
+def verify_account(body: UnverifiedAdminCredentialsModel, user_id: str):
+    user = admin_col.find_one({ "_id": ObjectId(user_id) })
+
+    if (not user):
+        return exception.invalid_credentials
+
+    user = UnverifiedAdminUserModel(**user)
+    
+    if (user.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
+        return exception.account_locked
+    
+    if (body.verification_code != user.verification_code):
+        # increment login attempts when wrong password
+        admin_col.update_one({ 
+            "_id": ObjectId(user.id) 
+        }, { 
+            "$set": { "login_attempts": user.login_attempts + 1 }
+        })
+        return exception.invalid_credentials
+    
+    admin_col.update_one({ 
+        "_id": ObjectId(user.id) 
+    }, { 
+        "$set": { 
+            "login_attempts": 0,
+        },
+        "$unset": {
+            "verification_code": ""
+        }
+    })
+
+    return { "message": "Account verified successfully."}
 
 # Protected routes
+
+@admin_router.get("/admin", tags=["Admin Account"], response_model=AdminUserModel, response_model_exclude={"hash", "login_attempts"})
+def get_user(user: AdminUserModel = Depends(get_current_user)):
+    return user
+
+@admin_router.patch("/admin/changepassword", tags=["Admin Account"])
+def change_password(body: ChangePasswordModel, user: AdminUserModel = Depends(get_current_user)):
+    double_hash = hash(body.hash)
+    if (double_hash != user.hash):
+        return exception.invalid_credentials
+    
+    double_new_hash = hash(body.new_hash)
+    admin_col.update_one({
+        "_id": ObjectId(user.id)
+    }, {
+        "$set": { "hash": double_new_hash }
+    })
+
+    return { "message": "Password changed successfully."}
 
 @admin_router.get("/admin/app", tags=["Admin Apps"], response_model=List[AppMetadataModel])
 def admin_register_app(user: AdminUserModel = Depends(get_current_user)):
@@ -195,3 +230,4 @@ def admin_delete_app(app_name: str, user: AdminUserModel = Depends(get_current_u
     db[f"app_{user.id}_{app_name}"].drop()
 
     return { "message": f"{app_name} deleted successfully." }
+
