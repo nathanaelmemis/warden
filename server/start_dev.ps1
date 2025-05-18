@@ -8,6 +8,6 @@ if (-Not (Test-Path -Path ".venv" -PathType Container)) {
     .\.venv\Scripts\activate
 }
 
-pytest
+pytest; 
 
 uvicorn main:app --reload --env-file .env.development --app-dir src

@@ -4,7 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import uuid
 
-def send_email(app: str, recipient_email: str, message: str):
+def send_verification_email(app: str, recipient_email: str, message: str):
     # Set up MIME
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"{app} Verification Code"

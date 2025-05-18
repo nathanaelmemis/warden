@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Callable
+import uuid
 from bson import ObjectId
 from fastapi import Request
 from jose import jwt
@@ -25,6 +26,9 @@ def generate_token(data: dict, expire: datetime):
 def hash(text: str):
     return hashlib.sha256(text.encode()).hexdigest()
 
+def generate_api_key():
+    return hash(str(uuid.uuid4()))
+
 def get_current_user(req: Request):
     access_token = req.cookies.get("access_token")
 
@@ -34,16 +38,14 @@ def get_current_user(req: Request):
     try:
         user_id = jwt.decode(access_token, SECRET_KEY, ALGORITHM)["id"]
 
-        user = admin_col.find_one({ "_id": ObjectId(user_id) })
+        user: dict = admin_col.find_one({ "_id": ObjectId(user_id) })
 
         if (not user):
             raise exception.unauthorized_access
-        
-        user = AdminUserModel(**user)
 
-        if (not user.account_verified):
+        if (user.get("verification_code")):
             return exception.account_not_verified
 
-        return user
+        return AdminUserModel(**user)
     except:
         raise exception.invalid_access_token
