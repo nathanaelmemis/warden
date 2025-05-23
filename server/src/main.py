@@ -10,7 +10,7 @@ for env_var in ENV_VARIABLES:
     if (os.environ.get(env_var) is None):
         raise EnvironmentError(f"{env_var} environment variable is not set.")
 
-from admin import admin_router
+from routers.admin import admin_router
 
 app = FastAPI()
 

@@ -11,3 +11,5 @@ def bad_request(message: str):
 
 def data_conflict(message: str):
     return HTTPException(status.HTTP_409_CONFLICT, message)
+
+internal_server_error = HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error.")

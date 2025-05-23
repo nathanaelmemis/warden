@@ -1,7 +1,6 @@
 from bson import ObjectId
 from dotenv import load_dotenv
 
-from models.AppMetadataModel import AppMetadataModel
 from schemas.AdminUserModel import AdminUserModel
 load_dotenv(dotenv_path=".env.development")
 
@@ -47,7 +46,7 @@ def test_admin_register_app():
         "max_login_attempts": 99,
         "lockout_time_per_attempt_sec": 99,
     })
-    assert res.status_code == 200
+    assert res.status_code == 201
 
 def test_admin_update_app():
     res = client.put("/admin/app/test_app_a", json={
