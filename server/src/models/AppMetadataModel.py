@@ -8,4 +8,4 @@ class AppMetadataModel(BaseModel):
     refresh_token_exp_sec: int
     max_login_attempts: int
     lockout_time_per_attempt_sec: int
-    api_key_hash: str
+    api_key_hash: str | None = None

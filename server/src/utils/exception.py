@@ -6,5 +6,8 @@ unauthorized_access = HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized 
 account_not_verified = HTTPException(status.HTTP_401_UNAUTHORIZED, "Account not verified.")
 invalid_access_token = HTTPException(status.HTTP_403_FORBIDDEN, "Invalid access token.")
 
+def bad_request(message: str):
+    return HTTPException(status.HTTP_400_BAD_REQUEST, message)
+
 def data_conflict(message: str):
     return HTTPException(status.HTTP_409_CONFLICT, message)

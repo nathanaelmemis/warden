@@ -11,7 +11,8 @@ from models.UnverifiedAdminCredentialsModel import UnverifiedAdminCredentialsMod
 from schemas.UnverifiedAdminUserModel import UnverifiedAdminUserModel
 from utils.common import app_exist, filter_out_app, get_app, model_list_dump
 from utils.database import db
-import os
+from utils.logging import logger
+from pymongo.errors import PyMongoError
 
 from models.AdminCredentialsModel import AdminCredentialsModel
 from utils.email import send_verification_email
@@ -31,20 +32,22 @@ admin_router = APIRouter()
 
 # Unprotected routes
 
+# Admin Account
+
 @admin_router.post("/admin/login", tags=["Admin Account"])
 def admin_login(body: AdminCredentialsModel, res: Response):
     user = admin_col.find_one({ "email": body.email })
 
     if (not user):
-        return exception.invalid_credentials
+        raise exception.invalid_credentials
 
     if (user.get("verification_code")):
-        return exception.account_not_verified
+        raise exception.account_not_verified
 
     user = AdminUserModel(**user)
     
     if (user.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
-        return exception.account_locked
+        raise exception.account_locked
     
     double_hash = hash(body.hash)
     if (double_hash != user.hash):
@@ -54,7 +57,7 @@ def admin_login(body: AdminCredentialsModel, res: Response):
             }, { 
                 "$set": { "login_attempts": user.login_attempts + 1 }
             })
-        return exception.invalid_credentials
+        raise exception.invalid_credentials
     
     # reset login attempts when authenticated
     admin_col.update_one({ 
@@ -94,7 +97,7 @@ def admin_register(body: AdminCredentialsModel):
     user_exist = admin_col.find_one({ "email": body.email }) is not None
 
     if (user_exist):
-        return exception.data_conflict("Email already used.")
+        raise exception.data_conflict("Email already used.")
     
     # TODO: Add link to frontend
     
@@ -124,12 +127,12 @@ def verify_account(body: UnverifiedAdminCredentialsModel, user_id: str):
     user = admin_col.find_one({ "_id": ObjectId(user_id) })
 
     if (not user):
-        return exception.invalid_credentials
+        raise exception.invalid_credentials
 
     user = UnverifiedAdminUserModel(**user)
     
     if (user.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
-        return exception.account_locked
+        raise exception.account_locked
     
     if (body.verification_code != user.verification_code):
         # increment login attempts when wrong password
@@ -138,7 +141,7 @@ def verify_account(body: UnverifiedAdminCredentialsModel, user_id: str):
         }, { 
             "$set": { "login_attempts": user.login_attempts + 1 }
         })
-        return exception.invalid_credentials
+        raise exception.invalid_credentials
     
     admin_col.update_one({ 
         "_id": ObjectId(user.id) 
@@ -155,6 +158,8 @@ def verify_account(body: UnverifiedAdminCredentialsModel, user_id: str):
 
 # Protected routes
 
+# Admin Account
+
 @admin_router.get("/admin", tags=["Admin Account"], response_model=AdminUserModel, response_model_exclude={"hash", "login_attempts"})
 def get_user(user: AdminUserModel = Depends(get_current_user)):
     return user
@@ -163,7 +168,7 @@ def get_user(user: AdminUserModel = Depends(get_current_user)):
 def change_password(body: ChangePasswordModel, user: AdminUserModel = Depends(get_current_user)):
     double_hash = hash(body.hash)
     if (double_hash != user.hash):
-        return exception.invalid_credentials
+        raise exception.invalid_credentials
     
     double_new_hash = hash(body.new_hash)
     admin_col.update_one({
@@ -174,60 +179,119 @@ def change_password(body: ChangePasswordModel, user: AdminUserModel = Depends(ge
 
     return { "message": "Password changed successfully."}
 
+# Admin Apps
+
 @admin_router.get("/admin/app", tags=["Admin Apps"], response_model=List[AppMetadataModel])
-def admin_register_app(user: AdminUserModel = Depends(get_current_user)):
+def get_registered_apps(user: AdminUserModel = Depends(get_current_user)):
     return user.apps
 
 @admin_router.post("/admin/app", tags=["Admin Apps"])
 def admin_register_app(app: AppMetadataModel, user: AdminUserModel = Depends(get_current_user)):
-    if (app_exist(app, user.apps)):
-        return exception.data_conflict("App already exists.")
+    if (app_exist(app.name, user.apps)):
+        raise exception.data_conflict("App already exists.")
     
-    user.apps.append(app)
+    if (app.api_key_hash != None):
+        raise exception.bad_request("Manual setting of api key is not allowed.")
     
-    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": model_list_dump(user.apps) }})
+    try:
+        app.api_key_hash = ""
+
+        # create collection for new app
+        db.create_collection(f"app_{user.id}_{app.name}")
+
+        # update user apps
+        admin_col.update_one({ "_id": ObjectId(user.id) }, { "$push": { "apps": app.model_dump() }})
+
+        logger.info(f"App {app.name} registered - User {user.id}")
+    except:
+        logger.error(f"App {app.name} cannot be registered - User {user.id}")
+        logger.debug({ "app": app.model_dump() })
+        logger.debug({ "user.apps": model_list_dump(user.apps) })
+        raise exception.data_conflict(f"App {app.name} cannot be registered.")
 
     return { "message": f"{app.name} has been registered."}
 
 @admin_router.put("/admin/app/{app_name}", tags=["Admin Apps"])
 def admin_update_app(app: AppMetadataModel, app_name: str, user: AdminUserModel = Depends(get_current_user)):
     if (not app_exist(app_name, user.apps)):
-        return exception.data_conflict("App doesn't exist.")
+        raise exception.data_conflict("App doesn't exist.")
     
-    filtered_user_apps = filter_out_app(app_name, user.apps)
-    filtered_user_apps.append(app)
     
-    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": model_list_dump(filtered_user_apps) }})
+    if (app.api_key_hash != None):
+        raise exception.bad_request("Manual setting of api key is not allowed.")
+
+    try:
+        # if changing name, rename collection
+        if (app.name != app_name):
+            db[f"app_{user.id}_{app_name}"].rename(f"app_{user.id}_{app.name}")
+
+        admin_col.update_one(
+            { "_id": ObjectId(user.id) }, 
+            {"$set": { 
+                "apps.$[elem].name": app.name,
+                "apps.$[elem].access_token_exp_sec": app.access_token_exp_sec,
+                "apps.$[elem].refresh_token_exp_sec": app.refresh_token_exp_sec,
+                "apps.$[elem].max_login_attempts": app.max_login_attempts,
+                "apps.$[elem].lockout_time_per_attempt_sec": app.lockout_time_per_attempt_sec
+            }}, 
+            array_filters=[{"elem.name": app_name}]
+        )
+
+        logger.info(f"App {app.name} updated - User {user.id}")
+    except:
+        logger.error(f"App {app.name} cannot be updated - User {user.id}")
+        logger.debug({ "app": app.model_dump() })
+        logger.debug({ "user.apps": model_list_dump(user.apps) })
+        raise exception.data_conflict(f"App {app.name} cannot be updated.")
 
     return { "message": f"{app_name} has been updated."}
 
 @admin_router.get("/admin/app/{app_name}/generate_api_key", tags=["Admin Apps"])
 def admin_generate_api_key(app_name: str, user: AdminUserModel = Depends(get_current_user)):
     if (not app_exist(app_name, user.apps)):
-        return exception.data_conflict("App doesn't exist.")
-    
-    filtered_user_apps = filter_out_app(app_name, user.apps)
+        raise exception.data_conflict("App doesn't exist.")
 
-    app = get_app(app_name, user.apps)
-    api_key = generate_api_key()
-    app.api_key_hash = hash(api_key)
+    try:
+        api_key = generate_api_key()
+        api_key_hash = hash(api_key)
 
-    filtered_user_apps.append(app)
+        admin_col.update_one(
+            { "_id": ObjectId(user.id) }, 
+            {"$set": { 
+                "apps.$[elem].api_key_hash": api_key_hash,
+            }}, 
+            array_filters=[{"elem.name": app_name}]
+        )
 
-    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": model_list_dump(filtered_user_apps) }})
+        logger.info(f"Generate API key for app {app_name} - User {user.id}")
+    except:
+        logger.error(f"Cannot generate API key for app {app_name} - User {user.id}")
+        logger.debug({ "user.apps": model_list_dump(user.apps) })
+        raise exception.data_conflict(f"Cannot generate API key for app {app_name}.")
 
     return { "api_key": api_key }
 
 @admin_router.delete("/admin/app/{app_name}", tags=["Admin Apps"])
 def admin_delete_app(app_name: str, user: AdminUserModel = Depends(get_current_user)):
     if (not app_exist(app_name, user.apps)):
-        return exception.data_conflict("App doesn't exist.")
+        logger.debug("I'm in here")
+        raise exception.data_conflict(f"App {app_name} doesn't exist.")
 
-    filtered_user_apps = filter_out_app(app_name, user.apps)
+    try:
+        db[f"app_{user.id}_{app_name}"].drop()
 
-    admin_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "apps": model_list_dump(filtered_user_apps) }})
+        admin_col.update_one(
+            { "_id": ObjectId(user.id) }, 
+            {"$pull": { "apps": { "name": app_name }}}, 
+        )
 
-    db[f"app_{user.id}_{app_name}"].drop()
+        logger.info(f"App {app_name} deleted - User {user.id}")
+    except PyMongoError as error:
+        logger.debug(repr(error))
+        raise exception.data_conflict(f"App {app_name} cannot be deleted.")
+    except:
+        logger.error(f"App {app_name} cannot be deleted - User {user.id}")
+        logger.debug({ "user.apps": model_list_dump(user.apps) })
+        raise exception.data_conflict(f"App {app_name} cannot be deleted.")
 
-    return { "message": f"{app_name} deleted successfully." }
-
+    return { "message": f"App {app_name} deleted." }

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from models.AppMetadataModel import AppMetadataModel
 
 
-def app_exist(app_name: AppMetadataModel, apps: List[AppMetadataModel]):
+def app_exist(app_name: str, apps: List[AppMetadataModel]):
     return bool(list(filter(lambda apps: apps.name == app_name, apps)))
 
 def get_app(app_name: str, apps: List[AppMetadataModel]) -> AppMetadataModel:

@@ -46,7 +46,6 @@ def test_admin_register_app():
         "refresh_token_exp_sec": 99,
         "max_login_attempts": 99,
         "lockout_time_per_attempt_sec": 99,
-        "api_key_hash": ""
     })
     assert res.status_code == 200
 
@@ -57,7 +56,6 @@ def test_admin_update_app():
         "refresh_token_exp_sec": 100,
         "max_login_attempts": 100,
         "lockout_time_per_attempt_sec": 100,
-        "api_key_hash": "jsafosaeh9f8sehfosahfioesuahf"
     })
     assert res.status_code == 200
 
