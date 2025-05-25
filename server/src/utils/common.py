@@ -1,18 +1,18 @@
 from typing import Callable, Dict, List
 
 from pydantic import BaseModel
-from models.AppMetadataModel import AppMetadataModel
+from models import App
 from utils import exception
 from utils.logging import logger
 
 
-def app_exist(app_name: str, apps: List[AppMetadataModel]):
+def app_exist(app_name: str, apps: List[App]):
     return bool(list(filter(lambda apps: apps.name == app_name, apps)))
 
-def get_app(app_name: str, apps: List[AppMetadataModel]) -> AppMetadataModel:
+def get_app(app_name: str, apps: List[App]) -> App:
     return next((app for app in apps if app.name == app_name), None)
 
-def filter_out_app(app_name: str, apps: List[AppMetadataModel]) -> List[AppMetadataModel]:
+def filter_out_app(app_name: str, apps: List[App]) -> List[App]:
     return list(filter(lambda app: app.name != app_name, apps))
 
 def model_list_dump(models: List[BaseModel]) -> List[Dict]:

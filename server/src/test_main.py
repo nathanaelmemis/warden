@@ -1,19 +1,19 @@
 from bson import ObjectId
 from dotenv import load_dotenv
 
-from schemas.AdminUserModel import AdminUserModel
+from models.Admin import Admin
 load_dotenv(dotenv_path=".env.development")
 
 from fastapi.testclient import TestClient
 from main import app
-from utils.auth import get_current_user
+from auth import get_current_user
 import os
-from utils.database import db
+from database import db
 
 admin_col = db.admin
 
 def override_get_current_user():
-    return AdminUserModel(**admin_col.find_one({ "_id": ObjectId("6821da0dd771d53184de590d") }))
+    return Admin(**admin_col.find_one({ "_id": ObjectId("6821da0dd771d53184de590d") }))
 
 app.dependency_overrides[get_current_user] = override_get_current_user
 

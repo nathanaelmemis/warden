@@ -7,9 +7,9 @@ from jose import jwt
 import os
 import hashlib
 
-from schemas.AdminUserModel import AdminUserModel
+from models import Admin
 from utils import exception
-from utils.database import db
+from database import db
 
 SECRET_KEY = os.environ["SECRET_KEY"]
 ALGORITHM = "HS256"
@@ -46,6 +46,6 @@ def get_current_user(req: Request):
         if (user.get("verification_code")):
             return exception.account_not_verified
 
-        return AdminUserModel(**user)
+        return Admin(**user)
     except:
         raise exception.invalid_access_token

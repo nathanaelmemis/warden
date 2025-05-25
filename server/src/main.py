@@ -1,6 +1,10 @@
-from fastapi import FastAPI
+from typing import Callable
+from fastapi import FastAPI, HTTPException, Request
 from dotenv import load_dotenv
 import os
+
+from utils import exception
+from utils.logging import logger
 
 load_dotenv()
 
@@ -13,5 +17,15 @@ for env_var in ENV_VARIABLES:
 from routers.admin import admin_router
 
 app = FastAPI()
+
+# @app.middleware("http")
+# async def error_logger(request: Request, call_next):
+#     try:
+#         response = await call_next(request)
+#     except HTTPException:
+#         return response
+#     except Exception as error:
+#         logger.error(request.base_url, error, query_params=request.query_params, body=request.body())
+#         raise exception.internal_server_error
 
 app.include_router(admin_router)

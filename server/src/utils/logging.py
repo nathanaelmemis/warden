@@ -21,8 +21,8 @@ class logger:
 
     @staticmethod
     def _mask_sensitive(data):
-        if (isinstance(data, BaseModel)):
-            data = data.model_dump()
+        # if (isinstance(data, BaseModel)):
+        #     data = data.model_dump()
             
         if isinstance(data, dict):
             return { 
