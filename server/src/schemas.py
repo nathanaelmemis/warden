@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from models import ApiId, AppAPIKey, AppBase
+from models import AppID, AppAPIKey, AppBase
 
 
 class AppCreate(AppBase):
@@ -9,7 +9,13 @@ class AppCreate(AppBase):
 class AppUpdate(AppBase):
     pass
 
-class AppApiKeyResponse(ApiId, AppAPIKey):
+class AppInsert(AppBase, AppAPIKey):
+    pass
+
+class AppResponse(AppID, AppBase):
+    pass
+
+class AppApiKeyResponse(AppID, AppAPIKey):
     pass
 
 
@@ -19,3 +25,10 @@ class Credentials(BaseModel):
 
 class ChangePassword(Credentials):
     new_hash: str
+
+
+class VerificationCode(BaseModel):
+    verification_code: str
+
+class UserData(BaseModel):
+    pass

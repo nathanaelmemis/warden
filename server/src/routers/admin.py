@@ -3,22 +3,22 @@ import secrets
 from typing import List
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Response
-from models import Admin, App, UnverifiedAdmin
-from schemas import ChangePassword, Credentials
-from utils.common import app_exist, try_except
+from models import Admin, UnverifiedAdmin
+from schemas import AppCreate, AppInsert, AppResponse, AppUpdate, ChangePassword, Credentials, VerificationCode
 from database import db
 from utils.logging import logger
 
 from utils.email import send_verification_email
 import utils.exception as exception
-from auth import generate_api_key, generate_token, get_current_user, hash
+from auth import generate_api_key, generate_token, get_current_admin, hash
 import utils.success as success
 
 ADMIN_ALLOWED_LOGIN_ATTEMPTS = 3
-ADMIN_ACCESS_TOKEN_EXP_MINS = 10
-ADMIN_REFRESH_TOKEN_EXP_MINS = 60
+ADMIN_ACCESS_TOKEN_EXP_SECS = 10 * 60
+ADMIN_REFRESH_TOKEN_EXP_SECS = 60 * 60
 
 admin_col = db.admin
+app_col = db.app
 
 admin_router = APIRouter()
 
@@ -29,7 +29,7 @@ admin_router = APIRouter()
 
 @admin_router.post("/admin/login", tags=["Admin Account"])
 def admin_login(credentials: Credentials, res: Response):
-    admin = admin_col.find_one({ "email": credentials.email }),
+    admin: dict = admin_col.find_one({ "email": credentials.email })
 
     if (not admin):
         raise exception.invalid_credentials
@@ -37,7 +37,7 @@ def admin_login(credentials: Credentials, res: Response):
     if (admin.get("verification_code")):
         raise exception.account_not_verified
     
-    admin = Admin(**admin)
+    admin: Admin = Admin(**admin)
 
     if (admin.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
         raise exception.account_locked
@@ -60,8 +60,8 @@ def admin_login(credentials: Credentials, res: Response):
         "$set": { "login_attempts": 0 }
     })
     
-    access_token_exp = datetime.utcnow() + timedelta(minutes=ADMIN_ACCESS_TOKEN_EXP_MINS)
-    refresh_token_exp = datetime.utcnow() + timedelta(minutes=ADMIN_ACCESS_TOKEN_EXP_MINS)
+    access_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_ACCESS_TOKEN_EXP_SECS)
+    refresh_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_REFRESH_TOKEN_EXP_SECS)
 
     access_token_data = admin.model_dump(exclude={"hash"})
     refresh_token_data = { "_id": admin.id }
@@ -74,28 +74,24 @@ def admin_login(credentials: Credentials, res: Response):
         access_token,
         httponly=True,
         samesite="strict",
-        max_age=access_token_exp,
+        max_age=ADMIN_ACCESS_TOKEN_EXP_SECS,
     )
     res.set_cookie(
         "refresh_token", 
         refresh_token,
         httponly=True,
         samesite="strict",
-        max_age=refresh_token_exp,
+        max_age=ADMIN_REFRESH_TOKEN_EXP_SECS,
     )
 
     logger.info(f"Admin {admin.id} authenticated.")
     # can't use success.ok() becase cookies will not be included breaking the endpoint.
-    return { "message": "User authenticated." }
+    return { "message": "Admin authenticated." }
 
 @admin_router.post("/admin/register", tags=["Admin Account"])
 def admin_register(credentials: Credentials):
 
-    user_exist = try_except(
-        lambda: admin_col.find_one({ "email": credentials.email }) is not None,
-        "A MongoDB error occured.",
-        credentials=credentials
-    )
+    user_exist = admin_col.find_one({ "email": credentials.email }) is not None
 
     if (user_exist):
         raise exception.data_conflict("Email already used.")
@@ -104,26 +100,18 @@ def admin_register(credentials: Credentials):
     # TODO: Add link to frontend
     message = f"You verification code is {verification_code}"
 
-    try_except(
-        lambda: send_verification_email("Warden", credentials.email, message),
-        "Failed to send verification code to email.",
-        credentials=credentials
-    )
+    send_verification_email("Warden", credentials.email, message)
 
-    user_id = try_except(
-        lambda: admin_col.insert_one({
-                "email": credentials.email,
-                "hash": hash(credentials.hash),
-                "apps": [],
-                "login_attempts": 0,
-                "verification_code": verification_code
-            }).inserted_id,
-        "Failed to insert admin admin in DB.",
-        credentials=credentials
-    )
+    user_id = admin_col.insert_one({
+            "email": credentials.email,
+            "hash": hash(credentials.hash),
+            "apps": [],
+            "login_attempts": 0,
+            "verification_code": verification_code
+        }).inserted_id
 
-    logger.info(f"Admin {user_id} registered successfully.")
-    return success.created("Admin registered successfully.")
+    logger.info(f"Admin {str(user_id)} registered successfully.")
+    return success.created(str(user_id))
 
 @admin_router.get("/admin/logout", tags=["Admin Account"])
 def admin_logout(res: Response):
@@ -131,54 +119,38 @@ def admin_logout(res: Response):
     res.delete_cookie(key="refresh_token")
 
     # can't use success.ok() becase cookies removal will not be included breaking the endpoint.
-    return { "message": "User logged out." }
+    return { "message": "Admin logged out." }
 
-@admin_router.post("/admin/{user_id}/verify", tags=["Admin Account"])
-def verify_account(body: UnverifiedAdmin, user_id: str):
-    admin = try_except(
-        lambda: admin_col.find_one({ "_id": ObjectId(user_id) }),
-        "A MongoDB error occured.",
-        user_id=user_id
-    )
+@admin_router.post("/admin/{admin_id}/verify", tags=["Admin Account"])
+def verify_account(body: VerificationCode, admin_id: str):
+    admin = admin_col.find_one({ "_id": ObjectId(admin_id) })
 
     if (not admin):
         raise exception.invalid_credentials
 
-    admin: Admin = try_except(
-        lambda: UnverifiedAdmin(**admin),
-        "Invalid admin admin data from DB.",
-        admin=admin
-    )
+    admin = UnverifiedAdmin(**admin)
     
     if (admin.login_attempts >= ADMIN_ALLOWED_LOGIN_ATTEMPTS):
         raise exception.account_locked
     
     if (body.verification_code != admin.verification_code):
         # increment login attempts when wrong password
-        try_except(
-            lambda: admin_col.update_one({ 
-                    "_id": ObjectId(admin.id) 
-                }, { 
-                    "$set": { "login_attempts": admin.login_attempts + 1 }
-                }),
-            "Could not increment login attempts.",
-            admin=admin
-        )
-
-    try_except(
-        lambda: admin_col.update_one({ 
+        admin_col.update_one({ 
                 "_id": ObjectId(admin.id) 
             }, { 
-                "$set": { 
-                    "login_attempts": 0,
-                },
-                "$unset": {
-                    "verification_code": ""
-                }
-            }),
-        "Could not reset login attempts.",
-        admin=admin
-    )
+                "$set": { "login_attempts": admin.login_attempts + 1 }
+            })
+
+    admin_col.update_one({ 
+            "_id": ObjectId(admin.id) 
+        }, { 
+            "$set": { 
+                "login_attempts": 0,
+            },
+            "$unset": {
+                "verification_code": ""
+            }
+        })
 
     logger.info(f"Admin {admin.id} was verified.")
     return success.ok("Account verified successfully.")
@@ -188,153 +160,103 @@ def verify_account(body: UnverifiedAdmin, user_id: str):
 # Admin Account
 
 @admin_router.get("/admin", tags=["Admin Account"], response_model=Admin, response_model_exclude={"hash", "login_attempts"})
-def get_user(admin: Admin = Depends(get_current_user)):
+def get_user(admin: Admin = Depends(get_current_admin)):
     return admin
 
+@admin_router.delete("/admin", tags=["Admin Account"])
+def get_user(admin: Admin = Depends(get_current_admin)):
+    admin_col.delete_one({ "_id": ObjectId(admin.id) })
+
+    return success.ok("Account deleted successfully.")
+
 @admin_router.patch("/admin/changepassword", tags=["Admin Account"])
-def change_password(body: ChangePassword, admin: Admin = Depends(get_current_user)):
+def change_password(body: ChangePassword, admin: Admin = Depends(get_current_admin)):
     double_hash = hash(body.hash)
     if (double_hash != admin.hash):
         raise exception.invalid_credentials
     
     double_new_hash = hash(body.new_hash)
-    try_except(
-        lambda: admin_col.update_one({
-                "_id": ObjectId(admin.id)
-            }, {
-                "$set": { "hash": double_new_hash }
-            }),
-        "Could not set hash.",
-        body=body,
-        admin=admin
-    )
+    admin_col.update_one({
+            "_id": ObjectId(admin.id)
+        }, {
+            "$set": { "hash": double_new_hash }
+        })
 
     logger.info(f"Admin {admin.id} successfully changed password.")
     return success.ok("Password changed successfully.")
 
 # Admin Apps
 
-@admin_router.get("/admin/app", tags=["Admin Apps"], response_model=List[App])
-def get_registered_apps(admin: Admin = Depends(get_current_user)):
-    return admin.apps
+@admin_router.get("/admin/app", tags=["Admin Apps"], response_model=List[AppResponse])
+def get_registered_apps(admin: Admin = Depends(get_current_admin)):
+    app_ids = [ ObjectId(app_id) for app_id in admin.apps ]
+    return app_col.find({ "_id": { "$in": app_ids }}).to_list()
 
 @admin_router.post("/admin/app", tags=["Admin Apps"])
-def admin_register_app(app: App, admin: Admin = Depends(get_current_user)):
-    if (app_exist(app.name, admin.apps)):
+def admin_register_app(app: AppCreate, admin: Admin = Depends(get_current_admin)):
+    app_ids = [ ObjectId(app_id) for app_id in admin.apps ]
+    app_exist = app_col.find_one({ "_id": { "$in": app_ids }, "name": app.name })
+    if (app_exist):
         raise exception.data_conflict("App already exists.")
     
-    if (app.api_key_hash != None):
-        raise exception.bad_request("Manual setting of api key is not allowed.")
-    
-    app.api_key_hash = ""
+    app: AppInsert = AppInsert(**app.model_dump(), api_key_hash="")
+
+    app_id: str = app_col.insert_one(app.model_dump()).inserted_id
 
     # create collection for new app
-    try_except(
-        lambda: db.create_collection(f"app_{admin.id}_{app.name}"),
-        "Could not create collection.",
-        admin=admin,
-        app=app
-    )
+    db.create_collection(f"app_{app_id}")
 
     # update admin apps
-    try_except(
-        lambda: admin_col.update_one(
-                { "_id": ObjectId(admin.id) }, 
-                { "$push": { "apps": app.model_dump() }}
-            ),
-        "Could not update admin apps.",
-        admin=admin,
-        app=app
-    )
-
-    logger.info(f"Admin {admin.id} registered app {app.name}.")
-    return success.created(f"App {app.name} has been registered.")
-
-@admin_router.put("/admin/app/{app_name}", tags=["Admin Apps"])
-def admin_update_app(app: App, app_name: str, admin: Admin = Depends(get_current_user)):
-    if (not app_exist(app_name, admin.apps)):
-        raise exception.data_conflict("App doesn't exist.")
-    
-    if (app.api_key_hash != None):
-        raise exception.bad_request("Manual setting of api key is not allowed.")
-
-    # if changing name, rename collection
-    if (app.name != app_name):
-        if (app_exist(app.name, admin.apps)):
-            raise exception.data_conflict("App already exists.")
-    
-        try_except(
-            lambda: db[f"app_{admin.id}_{app_name}"].rename(f"app_{admin.id}_{app.name}"),
-            "Could not rename collection.",
-            admin=admin,
-            app=app
+    admin_col.update_one(
+            { "_id": ObjectId(admin.id) }, 
+            { "$push": { "apps": app_id }}
         )
 
-    try_except(
-        lambda: admin_col.update_one(
-                { "_id": ObjectId(admin.id) }, 
-                {"$set": { 
-                    "apps.$[elem].name": app.name,
-                    "apps.$[elem].access_token_exp_sec": app.access_token_exp_sec,
-                    "apps.$[elem].refresh_token_exp_sec": app.refresh_token_exp_sec,
-                    "apps.$[elem].max_login_attempts": app.max_login_attempts,
-                    "apps.$[elem].lockout_time_per_attempt_sec": app.lockout_time_per_attempt_sec
-                }}, 
-                array_filters=[{"elem.name": app_name}]
-            ),
-        "Could not update admin apps.",
-        admin=admin,
-        app=app
-    )
+    logger.info(f"Admin {admin.id} registered app {app_id}.")
+    return success.created(str(app_id))
 
-    logger.info(f"Admin {admin.id} updated app {app.name}.")
-    return success.ok(f"App {app_name} has been updated.")
+@admin_router.patch("/admin/app/{app_id}", tags=["Admin Apps"])
+def admin_update_app(app: AppUpdate, app_id: str, admin: Admin = Depends(get_current_admin)):
+    if (app_id not in admin.apps):
+        raise exception.data_conflict("App doesn't exist.")
 
-@admin_router.get("/admin/app/{app_name}/generate_api_key", tags=["Admin Apps"], response_model=str)
-def admin_generate_api_key(app_name: str, admin: Admin = Depends(get_current_user)):
-    if (not app_exist(app_name, admin.apps)):
+    app_col.update_one(
+            { "_id": ObjectId(app_id) }, 
+            { "$set": app.model_dump() }
+        )
+
+    logger.info(f"Admin {admin.id} updated app {app_id}.")
+    return success.ok(f"App {app_id} has been updated.")
+
+@admin_router.get("/admin/app/{app_id}/generate_api_key", tags=["Admin Apps"], response_model=str)
+def admin_generate_api_key(app_id: str, admin: Admin = Depends(get_current_admin)):
+    if (app_id not in admin.apps):
         raise exception.data_conflict("App doesn't exist.")
 
     api_key = generate_api_key()
     api_key_hash = hash(api_key)
 
-    try_except(
-        lambda: admin_col.update_one(
-                { "_id": ObjectId(admin.id) }, 
-                {"$set": { 
-                    "apps.$[elem].api_key_hash": api_key_hash,
-                }}, 
-                array_filters=[{"elem.name": app_name}]
-            ),
-        "Could not set admin hash.",
-        app_name=app_name,
-        admin=admin
-    )
+    app_col.update_one(
+            { "_id": ObjectId(app_id) }, 
+            { "$set": { "api_key_hash": api_key_hash }}
+        )
 
-    logger.info(f"Admin {admin.id} generated API key for app {app_name}.")
-    return api_key
+    logger.info(f"Admin {admin.id} generated API key for app {app_id}.")
+    return success.ok(api_key)
 
-@admin_router.delete("/admin/app/{app_name}", tags=["Admin Apps"])
-def admin_delete_app(app_name: str, admin: Admin = Depends(get_current_user)):
-    if (not app_exist(app_name, admin.apps)):
-        raise exception.data_conflict(f"App {app_name} doesn't exist.")
+@admin_router.delete("/admin/app/{app_id}", tags=["Admin Apps"])
+def admin_delete_app(app_id: str, admin: Admin = Depends(get_current_admin)):
+    if (app_id not in admin.apps):
+        raise exception.data_conflict(f"App {app_id} doesn't exist.")
 
-    try_except(
-        lambda: db[f"app_{admin.id}_{app_name}"].drop(),
-        "Could not drop collection.",
-        app_name=app_name,
-        admin=admin
-    )
+    db[f"app_{app_id}"].drop()
 
-    try_except(
-        lambda: admin_col.update_one(
+    app_col.delete_one({ "_id": ObjectId(app_id)})
+
+    admin_col.update_one(
             { "_id": ObjectId(admin.id) }, 
-            {"$pull": { "apps": { "name": app_name }}}, 
-        ),
-        "Could not remove app from admin apps.",
-        app_name=app_name,
-        admin=admin
-    )
+            {"$pull": { "apps": ObjectId(app_id) }}, 
+        )
 
-    logger.info(f"Admin {admin.id} deleted app {app_name}.")
-    return success.ok(f"App {app_name} deleted.")
+    logger.info(f"Admin {admin.id} deleted app {app_id}.")
+    return success.ok(f"App {app_id} deleted.")

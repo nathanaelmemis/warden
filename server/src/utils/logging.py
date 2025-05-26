@@ -9,7 +9,11 @@ class logger:
 
     @staticmethod
     def info(message: str):
-        logger.uvicorn_logger.info(message)
+        logger.uvicorn_logger.info(pprint.pformat(message))
+
+    @staticmethod
+    def debug(message: str):
+        logger.uvicorn_logger.debug(pprint.pformat(message))
 
     @staticmethod
     def error(message: str, error: Exception, **data):
@@ -20,10 +24,7 @@ class logger:
         logger.uvicorn_logger.error(f"{message}\n{repr(error)}\n{pprint.pformat(content)}")
 
     @staticmethod
-    def _mask_sensitive(data):
-        # if (isinstance(data, BaseModel)):
-        #     data = data.model_dump()
-            
+    def _mask_sensitive(data):  
         if isinstance(data, dict):
             return { 
                 key: ("[REDACTED]" if key in logger.keys_to_mask else logger._mask_sensitive(value))

@@ -10,4 +10,4 @@ if (-Not (Test-Path -Path ".venv" -PathType Container)) {
 
 pytest; 
 
-uvicorn main:app --reload --env-file .env.development --app-dir src
+uvicorn main:app --reload --env-file .env.development --app-dir src --log-level debug
