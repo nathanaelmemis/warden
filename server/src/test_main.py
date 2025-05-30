@@ -32,9 +32,43 @@ def test_admin_create_account():
     res = client.post(f"/admin/{admin_id}/verify", json={ "verification_code": admin.verification_code })
     assert res.status_code == 200
 
-def test_admin_app():
+def test_admin_login():
     res = client.post("/admin/login", json={ "email": "test@gmail.com", "hash": "test" })
     assert res.status_code == 200
+
+    return res
+
+def test_admin_change_password():
+    res = test_admin_login()
+
+    res = client.patch("/admin/changepassword", 
+        json={ 
+            "email": "test@gmail.com", 
+            "hash": "test",
+            "new_hash": "testing" 
+        }
+    )
+    assert res.status_code == 200
+
+    res = client.post("/admin/login",
+        json={ 
+            "email": "test@gmail.com", 
+            "hash": "testing" 
+        }
+    )
+    assert res.status_code == 200
+
+    res = client.patch("/admin/changepassword", 
+        json={ 
+            "email": "test@gmail.com", 
+            "hash": "testing",
+            "new_hash": "test" 
+        }
+    )
+    assert res.status_code == 200
+
+def test_admin_app():
+    res = test_admin_login()
 
     res = client.post("/admin/app", json={
         "name": "test_app_test",
@@ -60,8 +94,7 @@ def test_admin_app():
     assert res.status_code == 200
 
 def test_app():
-    res = client.post("/admin/login", json={ "email": "test@gmail.com", "hash": "test" })
-    assert res.status_code == 200
+    res = test_admin_login()
 
     res = client.get("/admin/app")
     assert res.status_code == 200
@@ -109,6 +142,39 @@ def test_app():
             "Warden-App-API-Token": app_api_key
         }, 
         json={ "email": "apptest@gmail.com", "hash": "apptest" }
+    )
+    assert res.status_code == 200
+
+    res = client.get(
+        url="/user",
+        headers={
+            "Warden-App-ID": app.id,
+            "Warden-App-API-Token": app_api_key
+        }
+    )
+    assert res.status_code == 200
+
+    res = client.patch(
+        url="/user",
+        headers={
+            "Warden-App-ID": app.id,
+            "Warden-App-API-Token": app_api_key
+        }, 
+        json={ "testDataA": 123, "testDataB": "456" }
+    )
+    assert res.status_code == 200
+
+    res = client.patch(
+        url="/user/changepassword",
+        headers={
+            "Warden-App-ID": app.id,
+            "Warden-App-API-Token": app_api_key
+        }, 
+        json={ 
+            "email": "apptest@gmail.com", 
+            "hash": "apptest",
+            "new_hash": "apptesting"
+        }
     )
     assert res.status_code == 200
 
