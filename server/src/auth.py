@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from bson import ObjectId
-from fastapi import Request
+from fastapi import Depends, Request
 from jose import jwt
 import os
 import hashlib
@@ -70,7 +70,9 @@ def get_app(req: Request):
 
     return App(**app)
 
-def get_current_user(req: Request, app_col: Collection):
+def get_app_and_current_user(req: Request, app: App = Depends(get_app)):
+    app_col = db[f"app_{app.id}"]
+
     access_token = req.cookies.get("access_token")
 
     if (not access_token):
@@ -87,6 +89,6 @@ def get_current_user(req: Request, app_col: Collection):
         if (user.get("verification_code")):
             return exception.account_not_verified
 
-        return User(**user)
+        return app, User(**user)
     except:
         raise exception.invalid_access_token
