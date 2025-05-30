@@ -160,11 +160,11 @@ def verify_account(body: VerificationCode, admin_id: str):
 # Admin Account
 
 @admin_router.get("/admin", tags=["Admin Account"], response_model=Admin, response_model_exclude={"hash", "login_attempts"})
-def get_user(admin: Admin = Depends(get_current_admin)):
+def get_admin(admin: Admin = Depends(get_current_admin)):
     return admin
 
 @admin_router.delete("/admin", tags=["Admin Account"])
-def get_user(admin: Admin = Depends(get_current_admin)):
+def delete_admin(admin: Admin = Depends(get_current_admin)):
     admin_col.delete_one({ "_id": ObjectId(admin.id) })
 
     return success.ok("Account deleted successfully.")
