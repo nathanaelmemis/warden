@@ -4,17 +4,19 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from models import App, UnverifiedUser, User
-from schemas import Credentials, UserData, VerificationCode
+from schemas import ChangePassword, Credentials, UserData, VerificationCode
 
 from database import db
 from utils import success
 from utils.email import send_verification_email
 from utils.logging import logger
 import utils.exception as exception
-from auth import generate_token, get_app, get_current_user, hash
+from auth import generate_token, get_app, get_app_and_current_user, hash
 
 
 app_router = APIRouter()
+
+# Unprotected routes
 
 @app_router.post("/user/login", tags=["User Account"])
 def user_login(credentials: Credentials, res: Response, app: App = Depends(get_app)):
@@ -141,22 +143,55 @@ def verify_account(body: VerificationCode, user_id: str, app: App = Depends(get_
     logger.info(f"App {app.id} - User {user.id} was verified.")
     return success.ok("Account verified successfully.")
 
-@app_router.patch("/user", tags=["User Account"])
-def edit_user(req: Request, data: UserData, app: App = Depends(get_app)):
+# Protected routes
+
+@app_router.patch("/user/changepassword", tags=["Admin Account"])
+def change_password(body: ChangePassword, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+    app, user = app_user
+
     app_col = db[f"app_{app.id}"]
 
-    user: User = get_current_user(req, app_col)
+    double_hash = hash(body.hash)
+    if (double_hash != user.hash):
+        raise exception.invalid_credentials
+    
+    double_new_hash = hash(body.new_hash)
+    app_col.update_one({
+            "_id": ObjectId(user.id)
+        }, {
+            "$set": { "hash": double_new_hash }
+        })
 
-    app_col.update_one({ "_id": user.id }, { "data": data })
+    logger.info(f"App {app.id} - User {user.id} successfully changed password.")
+    return success.ok("Password changed successfully.")
+
+@app_router.get("/user", tags=["User Account"], response_model=User, response_model_exclude=["hash"])
+def edit_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+    app, user = app_user
+    
+    app_col = db[f"app_{app.id}"]
+
+    app_col.find_one({ "_id": user.id })
+
+    logger.info(f"App {app.id} - User {user.id} data updated.")
+    return success.ok("User data updated.")
+
+@app_router.patch("/user", tags=["User Account"])
+def edit_user(data: UserData, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+    app, user = app_user
+
+    app_col = db[f"app_{app.id}"]
+
+    app_col.update_one({ "_id": user.id }, { "$set": { "data": data.model_dump() }})
 
     logger.info(f"App {app.id} - User {user.id} data updated.")
     return success.ok("User data updated.")
 
 @app_router.delete("/user", tags=["User Account"])
-def edit_user(req: Request, app: App = Depends(get_app)):
-    app_col = db[f"app_{app.id}"]
+def edit_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+    app, user = app_user
 
-    user: User = get_current_user(req, app_col)
+    app_col = db[f"app_{app.id}"]
 
     app_col.delete_one({ "_id": user.id })
 
