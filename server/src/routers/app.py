@@ -108,7 +108,7 @@ def user_register(credentials: Credentials, app: App = Depends(get_app)):
     return success.created(str(user_id))
 
 @app_router.post("/user/{user_id}/verify", tags=["Admin Account"])
-def verify_account(body: VerificationCode, user_id: str, app: App = Depends(get_app)):
+def user_verify_account(body: VerificationCode, user_id: str, app: App = Depends(get_app)):
     app_col = db[f"app_{app.id}"]
 
     user = app_col.find_one({ "_id": ObjectId(user_id) })
@@ -146,7 +146,7 @@ def verify_account(body: VerificationCode, user_id: str, app: App = Depends(get_
 # Protected routes
 
 @app_router.patch("/user/changepassword", tags=["Admin Account"])
-def change_password(body: ChangePassword, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+def user_change_password(body: ChangePassword, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
 
     app_col = db[f"app_{app.id}"]
@@ -166,7 +166,7 @@ def change_password(body: ChangePassword, app_user: tuple[App, User] = Depends(g
     return success.ok("Password changed successfully.")
 
 @app_router.get("/user", tags=["User Account"], response_model=User, response_model_exclude=["hash"])
-def edit_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+def get_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
     
     app_col = db[f"app_{app.id}"]
@@ -188,7 +188,7 @@ def edit_user(data: UserData, app_user: tuple[App, User] = Depends(get_app_and_c
     return success.ok("User data updated.")
 
 @app_router.delete("/user", tags=["User Account"])
-def edit_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+def delete_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
 
     app_col = db[f"app_{app.id}"]

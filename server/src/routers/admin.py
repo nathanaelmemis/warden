@@ -122,7 +122,7 @@ def admin_logout(res: Response):
     return { "message": "Admin logged out." }
 
 @admin_router.post("/admin/{admin_id}/verify", tags=["Admin Account"])
-def verify_account(body: VerificationCode, admin_id: str):
+def admin_verify_account(body: VerificationCode, admin_id: str):
     admin = admin_col.find_one({ "_id": ObjectId(admin_id) })
 
     if (not admin):
@@ -170,7 +170,7 @@ def delete_admin(admin: Admin = Depends(get_current_admin)):
     return success.ok("Account deleted successfully.")
 
 @admin_router.patch("/admin/changepassword", tags=["Admin Account"])
-def change_password(body: ChangePassword, admin: Admin = Depends(get_current_admin)):
+def admin_change_password(body: ChangePassword, admin: Admin = Depends(get_current_admin)):
     double_hash = hash(body.hash)
     if (double_hash != admin.hash):
         raise exception.invalid_credentials
@@ -188,12 +188,12 @@ def change_password(body: ChangePassword, admin: Admin = Depends(get_current_adm
 # Admin Apps
 
 @admin_router.get("/admin/app", tags=["Admin Apps"], response_model=List[AppResponse])
-def get_registered_apps(admin: Admin = Depends(get_current_admin)):
+def get_admin_registered_apps(admin: Admin = Depends(get_current_admin)):
     app_ids = [ ObjectId(app_id) for app_id in admin.apps ]
     return app_col.find({ "_id": { "$in": app_ids }}).to_list()
 
 @admin_router.post("/admin/app", tags=["Admin Apps"])
-def admin_register_app(app: AppCreate, admin: Admin = Depends(get_current_admin)):
+def create_admin_app(app: AppCreate, admin: Admin = Depends(get_current_admin)):
     app_ids = [ ObjectId(app_id) for app_id in admin.apps ]
     app_exist = app_col.find_one({ "_id": { "$in": app_ids }, "name": app.name })
     if (app_exist):
@@ -216,7 +216,7 @@ def admin_register_app(app: AppCreate, admin: Admin = Depends(get_current_admin)
     return success.created(str(app_id))
 
 @admin_router.patch("/admin/app/{app_id}", tags=["Admin Apps"])
-def admin_update_app(app: AppUpdate, app_id: str, admin: Admin = Depends(get_current_admin)):
+def edit_admin_app(app: AppUpdate, app_id: str, admin: Admin = Depends(get_current_admin)):
     if (app_id not in admin.apps):
         raise exception.data_conflict("App doesn't exist.")
 
@@ -229,7 +229,7 @@ def admin_update_app(app: AppUpdate, app_id: str, admin: Admin = Depends(get_cur
     return success.ok(f"App {app_id} has been updated.")
 
 @admin_router.get("/admin/app/{app_id}/generate_api_key", tags=["Admin Apps"], response_model=str)
-def admin_generate_api_key(app_id: str, admin: Admin = Depends(get_current_admin)):
+def admin_app_generate_api_key(app_id: str, admin: Admin = Depends(get_current_admin)):
     if (app_id not in admin.apps):
         raise exception.data_conflict("App doesn't exist.")
 
@@ -245,7 +245,7 @@ def admin_generate_api_key(app_id: str, admin: Admin = Depends(get_current_admin
     return success.ok(api_key)
 
 @admin_router.delete("/admin/app/{app_id}", tags=["Admin Apps"])
-def admin_delete_app(app_id: str, admin: Admin = Depends(get_current_admin)):
+def delete_admin_app(app_id: str, admin: Admin = Depends(get_current_admin)):
     if (app_id not in admin.apps):
         raise exception.data_conflict(f"App {app_id} doesn't exist.")
 
