@@ -123,6 +123,9 @@ def test_app():
 
 
 def test_admin_cleanup():
+    res = client.post("/admin/login", json={ "email": "test@gmail.com", "hash": "test" })
+    assert res.status_code == 200
+    
     res = client.get("/admin/app")
     assert res.status_code == 200
 
