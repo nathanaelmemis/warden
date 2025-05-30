@@ -165,7 +165,7 @@ def user_change_password(body: ChangePassword, app_user: tuple[App, User] = Depe
     logger.info(f"App {app.id} - User {user.id} successfully changed password.")
     return success.ok("Password changed successfully.")
 
-@app_router.get("/user", tags=["User Account"], response_model=User, response_model_exclude=["hash"])
+@app_router.get("/user", tags=["User Account"], response_model=User, response_model_exclude=["_id", "hash", "login_attempts"])
 def get_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
     
