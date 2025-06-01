@@ -4,7 +4,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from models import App, UnverifiedUser, User
-from schemas import ChangePassword, Credentials, UserData, VerificationCode
+from schemas import ChangePassword, Credentials, EditUserRequest, VerificationCode
 
 from database import db
 from utils import success
@@ -107,7 +107,7 @@ def user_register(credentials: Credentials, app: App = Depends(get_app)):
     logger.info(f"App {app.id} - User {str(user_id)} registered successfully.")
     return success.created(str(user_id))
 
-@app_router.post("/user/{user_id}/verify", tags=["Admin Account"])
+@app_router.post("/user/{user_id}/verify", tags=["User Account"])
 def user_verify_account(body: VerificationCode, user_id: str, app: App = Depends(get_app)):
     app_col = db[f"app_{app.id}"]
 
@@ -145,7 +145,7 @@ def user_verify_account(body: VerificationCode, user_id: str, app: App = Depends
 
 # Protected routes
 
-@app_router.patch("/user/changepassword", tags=["Admin Account"])
+@app_router.patch("/user/changepassword", tags=["User Account"])
 def user_change_password(body: ChangePassword, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
 
@@ -177,12 +177,12 @@ def get_user(app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     return success.ok("User data updated.")
 
 @app_router.patch("/user", tags=["User Account"])
-def edit_user(data: UserData, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
+def edit_user(body: EditUserRequest, app_user: tuple[App, User] = Depends(get_app_and_current_user)):
     app, user = app_user
 
     app_col = db[f"app_{app.id}"]
 
-    app_col.update_one({ "_id": user.id }, { "$set": { "data": data.model_dump() }})
+    app_col.update_one({ "_id": ObjectId(user.id) }, { "$set": { "data": body.user_data }})
 
     logger.info(f"App {app.id} - User {user.id} data updated.")
     return success.ok("User data updated.")

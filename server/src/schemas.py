@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from pydantic import BaseModel
 
 from models import AppID, AppAPIKey, AppBase
@@ -30,5 +31,5 @@ class ChangePassword(Credentials):
 class VerificationCode(BaseModel):
     verification_code: str
 
-class UserData(BaseModel):
-    pass
+class EditUserRequest(BaseModel):
+    user_data: dict
