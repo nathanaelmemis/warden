@@ -52,8 +52,8 @@ def get_current_admin(req: Request):
         raise exception.invalid_access_token
     
 def get_app(req: Request):
-    app_id = req.headers.get("Warden-App-ID")
-    app_api_token = req.headers.get("Warden-App-API-Token")
+    app_id = req.headers.get("Warden-App-API-ID")
+    app_api_token = req.headers.get("Warden-App-API-Key")
 
     if (app_id == None or app_api_token == None):
         raise exception.missing_headers

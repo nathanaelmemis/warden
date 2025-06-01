@@ -109,8 +109,8 @@ def test_app():
     res = client.post(
         url="/user/register", 
         headers={
-            "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-ID": app.id,
+            "Warden-App-API-Key": app_api_key
         },
         json={ 
             "email": "apptest@gmail.com", 
