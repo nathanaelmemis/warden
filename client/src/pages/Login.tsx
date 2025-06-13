@@ -1,21 +1,16 @@
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { Background } from "../components/Background";
-import { useState, type ChangeEvent, type FC } from "react";
+import { useState, type ChangeEvent, type FC, type FormEvent } from "react";
+import { ValidationTextField } from "../components/ValidationTextField";
 
 export const Login: FC = () => {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
 
-    const handleEmailTextFieldChange = (event: ChangeEvent<HTMLInputElement>) => {
-        setEmail(event.target.value)
-    }
+    const handleSubmit = (event: FormEvent) => {
+        event.preventDefault()
 
-    const handlePasswordTextFieldChange = (event: ChangeEvent<HTMLInputElement>) => {
-        setPassword(event.target.value)
-    }
-
-    const handleSubmit = () => {
-        console.log(email, password)
+        // console.log(event.)
     }
 
     return (
@@ -37,15 +32,18 @@ export const Login: FC = () => {
             >
                 <Typography 
                     variant="h3" fontWeight="bold">Warden</Typography>
-                <TextField
+                <ValidationTextField
                     label="Email"
                     value={email}
-                    onChange={handleEmailTextFieldChange}
+                    setValue={value => setEmail(value)}
+                    required
+                    pattern={/^nathan$/}
                 />
-                <TextField
+                <ValidationTextField
                     label="Password"
                     value={password}
-                    onChange={handlePasswordTextFieldChange}
+                    setValue={value => setPassword(value)}
+                    required
                 />
                 <Box
                     display="flex"
