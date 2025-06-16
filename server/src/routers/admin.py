@@ -1,8 +1,11 @@
 from datetime import datetime, timedelta
+import os
+import re
 import secrets
+from jose import jwt
 from typing import List
 from bson import ObjectId
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from models import Admin, UnverifiedAdmin
 from schemas import AppCreate, AppInsert, AppResponse, AppUpdate, ChangePassword, Credentials, VerificationCode
 from database import db
@@ -10,12 +13,15 @@ from utils.logging import logger
 
 from utils.email import send_verification_email
 import utils.exception as exception
-from auth import generate_api_key, generate_token, get_current_admin, hash
+from auth import SECRET_KEY, generate_api_key, generate_token, get_current_admin, hash
 import utils.success as success
 
+SECRET_KEY = os.environ["SECRET_KEY"]
+ALGORITHM = os.environ["HASHING_ALGORITHM"]
+
 ADMIN_ALLOWED_LOGIN_ATTEMPTS = 3
-ADMIN_ACCESS_TOKEN_EXP_SECS = 10 * 60
-ADMIN_REFRESH_TOKEN_EXP_SECS = 60 * 60
+ADMIN_ACCESS_TOKEN_EXP_SECS = 60 * 1
+ADMIN_REFRESH_TOKEN_EXP_SECS = 60 * 2
 
 admin_col = db.admin
 app_col = db.app
@@ -64,7 +70,7 @@ def admin_login(credentials: Credentials, res: Response):
     refresh_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_REFRESH_TOKEN_EXP_SECS)
 
     access_token_data = admin.model_dump(exclude={"hash"})
-    refresh_token_data = { "_id": admin.id }
+    refresh_token_data = { "id": admin.id }
     
     access_token = generate_token(access_token_data, access_token_exp)
     refresh_token = generate_token(refresh_token_data, refresh_token_exp)
@@ -85,11 +91,14 @@ def admin_login(credentials: Credentials, res: Response):
     )
 
     logger.info(f"Admin {admin.id} authenticated.")
-    # can't use success.ok() becase cookies will not be included breaking the endpoint.
+    # can't use success.ok() becase cookies will not be included, breaking the endpoint.
     return { "message": "Admin authenticated." }
 
 @admin_router.post("/admin/register", tags=["Admin Account"])
 def admin_register(credentials: Credentials):
+
+    if (not re.fullmatch(r"^[a-zA-Z0-9]([a-zA-Z0-9]){1,}((\.|-|\+|_)([a-zA-Z0-9]){2,})*@g(oogle)?mail\.com$", credentials.email)):
+        raise exception.bad_request("Invalid email format.")
 
     user_exist = admin_col.find_one({ "email": credentials.email }) is not None
 
@@ -154,6 +163,45 @@ def admin_verify_account(body: VerificationCode, admin_id: str):
 
     logger.info(f"Admin {admin.id} was verified.")
     return success.ok("Account verified successfully.")
+
+@admin_router.get("/admin/refresh")
+def admin_refresh_token(req: Request, res: Response):
+    refresh_token = req.cookies.get("refresh_token")
+
+    if (not refresh_token):
+        raise exception.unauthorized_access
+    
+    try:
+        admin_id = jwt.decode(refresh_token, SECRET_KEY, ALGORITHM)["id"] 
+    except:
+        raise exception.unauthorized_access
+
+    admin: dict = admin_col.find_one({ "_id": ObjectId(admin_id) })
+
+    if (not admin):
+        raise exception.unauthorized_access
+
+    if (admin.get("verification_code")):
+        return exception.account_not_verified
+    
+    access_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_ACCESS_TOKEN_EXP_SECS)
+
+    admin: Admin = Admin(**admin)
+    access_token_data = admin.model_dump(exclude={"hash"})
+    
+    access_token = generate_token(access_token_data, access_token_exp)
+    
+    res.set_cookie(
+        "access_token", 
+        access_token,
+        httponly=True,
+        samesite="strict",
+        max_age=ADMIN_ACCESS_TOKEN_EXP_SECS,
+    )
+
+    logger.info(f"Admin {admin.id} access token refreshed.")
+    # can't use success.ok() becase cookies will not be included, breaking the endpoint.
+    return { "message": "Admin access token refreshed." }
 
 # Protected routes
 

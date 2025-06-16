@@ -12,7 +12,7 @@ from utils import exception
 from database import db
 
 SECRET_KEY = os.environ["SECRET_KEY"]
-ALGORITHM = "HS256"
+ALGORITHM = os.environ["HASHING_ALGORITHM"]
 
 admin_col = db.admin
 app_col = db.app
@@ -37,17 +37,17 @@ def get_current_admin(req: Request):
         raise exception.unauthorized_access
 
     try:
-        user_id = jwt.decode(access_token, SECRET_KEY, ALGORITHM)["id"]
+        admin_id = jwt.decode(access_token, SECRET_KEY, ALGORITHM)["id"]
 
-        user: dict = admin_col.find_one({ "_id": ObjectId(user_id) })
+        admin: dict = admin_col.find_one({ "_id": ObjectId(admin_id) })
 
-        if (not user):
+        if (not admin):
             raise exception.unauthorized_access
 
-        if (user.get("verification_code")):
+        if (admin.get("verification_code")):
             return exception.account_not_verified
 
-        return Admin(**user)
+        return Admin(**admin)
     except:
         raise exception.invalid_access_token
     

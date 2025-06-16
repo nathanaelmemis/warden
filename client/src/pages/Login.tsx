@@ -1,16 +1,24 @@
-import { Box, Button, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Divider, Link, Stack, Typography } from "@mui/material";
+import { useForm, type SubmitHandler } from "react-hook-form"
+
 import { Background } from "../components/Background";
-import { useState, type ChangeEvent, type FC, type FormEvent } from "react";
+import { type FC } from "react";
 import { ValidationTextField } from "../components/ValidationTextField";
 
+type Inputs = {
+    email: string
+    password: string
+}
+
 export const Login: FC = () => {
-    const [email, setEmail] = useState("")
-    const [password, setPassword] = useState("")
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+    } = useForm<Inputs>()
 
-    const handleSubmit = (event: FormEvent) => {
-        event.preventDefault()
-
-        // console.log(event.)
+    const onSubmit: SubmitHandler<Inputs> = (data) => {
+        
     }
 
     return (
@@ -28,28 +36,45 @@ export const Login: FC = () => {
                     backgroundColor: "secondary.main"
                 }}
                 component="form"
-                onSubmit={handleSubmit}
+                onSubmit={handleSubmit(onSubmit)}
             >
-                <Typography 
+                <Typography
                     variant="h3" fontWeight="bold">Warden</Typography>
                 <ValidationTextField
+                    name="email"
                     label="Email"
-                    value={email}
-                    setValue={value => setEmail(value)}
-                    required
-                    pattern={/^nathan$/}
+                    register={register}
+                    rules={{
+                        required: 'Email is required',
+                        pattern: {
+                            value: /^[a-zA-Z0-9]([a-zA-Z0-9]){1,}((\.|-|\+|_)([a-zA-Z0-9]){2,})*@g(oogle)?mail\.com$/,
+                            message: "Invalid email format"
+                        }
+                    }}
+                    error={errors.email}
                 />
                 <ValidationTextField
+                    name="password"
                     label="Password"
-                    value={password}
-                    setValue={value => setPassword(value)}
-                    required
+                    type="password"
+                    register={register}
+                    rules={{
+                        required: 'Password is required',
+                    }}
+                    error={errors.password}
                 />
                 <Box
                     display="flex"
                     justifyContent="right"
                 >
-                    <Button variant="contained" type="submit">Login</Button>
+                    <Button fullWidth variant="contained" type="submit">Login</Button>
+                </Box>
+                <Box
+                    display="flex"
+                    justifyContent="center"
+                >
+                    <Typography textAlign="center" mr=".5em">New User?</Typography>
+                    <Link href="/register" underline="none">Sign Up</Link>
                 </Box>
             </Stack>
         </Background>

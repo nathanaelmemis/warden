@@ -1,8 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Router } from './routes'
+import { Router } from './router/router'
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import './main.css'
+import './index.css'
 
 let theme = createTheme()
 

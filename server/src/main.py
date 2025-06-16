@@ -12,7 +12,13 @@ from utils.logging import logger
 
 load_dotenv()
 
-ENV_VARIABLES = ["SECRET_KEY", "MONGODB_URL", "EMAIL_SERVICE_USER", "EMAIL_SERVICE_PASSWORD"]
+ENV_VARIABLES = [
+    "SECRET_KEY", 
+    "HASHING_ALGORITHM",
+    "MONGODB_URL", 
+    "EMAIL_SERVICE_USER", 
+    "EMAIL_SERVICE_PASSWORD"
+]
 
 for env_var in ENV_VARIABLES:
     if (os.environ.get(env_var) is None):
