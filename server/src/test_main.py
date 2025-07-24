@@ -109,7 +109,7 @@ def test_app():
     res = client.post(
         url="/user/register", 
         headers={
-            "Warden-App-API-ID": app.id,
+            "Warden-App-ID": app.id,
             "Warden-App-API-Key": app_api_key
         },
         json={ 
@@ -129,7 +129,7 @@ def test_app():
         url=f"/user/{user_id}/verify", 
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         },
         json={ "verification_code": user.verification_code }
     )
@@ -139,7 +139,7 @@ def test_app():
         url="/user/login",
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         }, 
         json={ "email": "apptest@gmail.com", "hash": "apptest" }
     )
@@ -149,7 +149,7 @@ def test_app():
         url="/user",
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         }
     )
     assert res.status_code == 200
@@ -158,9 +158,14 @@ def test_app():
         url="/user",
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         }, 
-        json={ "testDataA": 123, "testDataB": "456" }
+        json={
+            "user_data": {
+                "testDataA": 123, 
+                "testDataB": "456"
+            }
+        }
     )
     assert res.status_code == 200
 
@@ -168,7 +173,7 @@ def test_app():
         url="/user/changepassword",
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         }, 
         json={ 
             "email": "apptest@gmail.com", 
@@ -182,7 +187,7 @@ def test_app():
         url="/user",
         headers={
             "Warden-App-ID": app.id,
-            "Warden-App-API-Token": app_api_key
+            "Warden-App-API-Key": app_api_key
         }, 
     )
     assert res.status_code == 200

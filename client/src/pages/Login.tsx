@@ -1,9 +1,13 @@
-import { Box, Button, Divider, Link, Stack, Typography } from "@mui/material";
+import { Box, Button, Link, Stack, Typography } from "@mui/material";
 import { useForm, type SubmitHandler } from "react-hook-form"
 
 import { Background } from "../components/Background";
 import { type FC } from "react";
 import { ValidationTextField } from "../components/ValidationTextField";
+import { useCustomAxios } from "../hooks/useCustomAxios";
+import { hash } from "../utils/auth";
+import { useNavigate } from "react-router-dom";
+import { routes } from "../router/routes";
 
 type Inputs = {
     email: string
@@ -11,14 +15,24 @@ type Inputs = {
 }
 
 export const Login: FC = () => {
+    const customAxios = useCustomAxios()
+    const navigate = useNavigate()
+
     const {
         register,
         handleSubmit,
         formState: { errors },
     } = useForm<Inputs>()
 
-    const onSubmit: SubmitHandler<Inputs> = (data) => {
-        
+    const onSubmit: SubmitHandler<Inputs> = async (data) => {
+        customAxios.post("/api/admin/login", {
+            email: data.email,
+            // hash: await hash(data.password) FIXME: use hashing once registration is done.
+            hash: data.password
+        }).then((_) => {
+            console.log("testest")
+            navigate(routes.DASHBOARD)
+        }).catch((_) => { })
     }
 
     return (
@@ -39,7 +53,11 @@ export const Login: FC = () => {
                 onSubmit={handleSubmit(onSubmit)}
             >
                 <Typography
-                    variant="h3" fontWeight="bold">Warden</Typography>
+                    variant="h3"
+                    fontWeight="bold"
+                >
+                    Warden
+                </Typography>
                 <ValidationTextField
                     name="email"
                     label="Email"

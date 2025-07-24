@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Request, Response
@@ -53,8 +53,8 @@ def user_login(credentials: Credentials, res: Response, app: App = Depends(get_a
         "$set": { "login_attempts": 0 }
     })
     
-    access_token_exp = datetime.utcnow() + timedelta(seconds=app.access_token_exp_sec)
-    refresh_token_exp = datetime.utcnow() + timedelta(seconds=app.refresh_token_exp_sec)
+    access_token_exp = datetime.now(tz=timezone.utc) + timedelta(seconds=app.access_token_exp_sec)
+    refresh_token_exp = datetime.now(tz=timezone.utc) + timedelta(seconds=app.refresh_token_exp_sec)
 
     access_token_data = user.model_dump(exclude={"hash"})
     refresh_token_data = { "_id": user.id }

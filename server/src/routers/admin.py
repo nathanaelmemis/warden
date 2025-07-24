@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import re
 import secrets
@@ -66,8 +66,8 @@ def admin_login(credentials: Credentials, res: Response):
         "$set": { "login_attempts": 0 }
     })
     
-    access_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_ACCESS_TOKEN_EXP_SECS)
-    refresh_token_exp = datetime.utcnow() + timedelta(seconds=ADMIN_REFRESH_TOKEN_EXP_SECS)
+    access_token_exp = datetime.now(tz=timezone.utc) + timedelta(seconds=ADMIN_ACCESS_TOKEN_EXP_SECS)
+    refresh_token_exp = datetime.now(tz=timezone.utc) + timedelta(seconds=ADMIN_REFRESH_TOKEN_EXP_SECS)
 
     access_token_data = admin.model_dump(exclude={"hash"})
     refresh_token_data = { "id": admin.id }
@@ -164,7 +164,7 @@ def admin_verify_account(body: VerificationCode, admin_id: str):
     logger.info(f"Admin {admin.id} was verified.")
     return success.ok("Account verified successfully.")
 
-@admin_router.get("/admin/refresh")
+@admin_router.get("/admin/refresh", tags=["Admin Account"])
 def admin_refresh_token(req: Request, res: Response):
     refresh_token = req.cookies.get("refresh_token")
 

@@ -52,13 +52,13 @@ def get_current_admin(req: Request):
         raise exception.invalid_access_token
     
 def get_app(req: Request):
-    app_id = req.headers.get("Warden-App-API-ID")
-    app_api_token = req.headers.get("Warden-App-API-Key")
+    app_id = req.headers.get("Warden-App-ID")
+    app_api_key = req.headers.get("Warden-App-API-Key")
 
-    if (app_id == None or app_api_token == None):
+    if (app_id == None or app_api_key == None):
         raise exception.missing_headers
     
-    api_key_hash = hash(app_api_token)
+    api_key_hash = hash(app_api_key)
 
     app = app_col.find_one({ 
         "_id": ObjectId(app_id), 

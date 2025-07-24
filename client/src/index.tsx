@@ -13,7 +13,9 @@ theme = createTheme(theme, {
             dark: "#041B1A"
         },
         secondary: {
-            main: "#9C9674"
+            light: "#cfc79bff",
+            main: "#9C9674",
+            dark: "#757157ff",
         }
     }
 });
